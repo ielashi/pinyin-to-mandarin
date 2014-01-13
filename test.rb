@@ -69,7 +69,7 @@ class LanguageModel
             bi_frequency = bi_fre[0].to_f
             pro = (1.0 + bi_frequency) / ($possible_bigram.to_f + last_fre.to_f)
             pro = Math.log(pro)
-        else
+            else
             pro = 1 / ($possible_bigram.to_f + last_fre.to_f)
             pro = Math.log(pro)
         end
@@ -96,6 +96,39 @@ class LanguageModel
         end
         return pro
     end
+    
+    def PinyinToMandarin(query)
+        query_list = query.split
+        query_map = Hash.new()
+        query_list.each do |p|
+            query_map[p] = $pinyin_mapping[p]
+        end
+        
+        pro_wordlist = []
+        wordlist = Combination(query_list,query_map)
+        wordlist.each do |word|
+            word_prob = ComputeProb(word)
+            pro_wordlist << word_prob
+        end
+        puts wordlist.size
+        i = 0
+        no_combo = wordlist.size
+        result = Hash.new()
+        while i < no_combo
+            result[wordlist[i]] = pro_wordlist[i]
+            i = i + 1
+        end
+        
+        temp = result.sort_by{|key, value| value}.reverse
+        if temp.size < 10
+            n = temp.size - 1
+            else
+            n = 9
+        end
+        result_array = Array.new()
+        temp[0..n].each{|f|  result_array << f[0]}
+        return result_array
+    end
 end
 
 ##### main #####
@@ -107,45 +140,40 @@ $unigram_frequency = model.Frequency("dataset/unigram_frequency.txt")
 $total_unigram = model.SumUp("dataset/unigram_frequency.txt")
 $pinyin_mapping = model.PinyinMap("dataset/pinyin_map.txt")
 $possible_bigram = model.PossibleBigram
-while(true)
-# get user query and form different combination
-    print "Input a query: "
-    query = gets
-    stime = Time.now
-    puts stime
-    query_list = query.split
-    query_map = Hash.new()
-    query_list.each do |p|
-        query_map[p] = $pinyin_mapping[p]
-    end
 
-    pro_wordlist = []
-    wordlist = model.Combination(query_list,query_map)
-    wordlist.each do |word|
-        word_prob = model.ComputeProb(word)
-        pro_wordlist << word_prob
-    end
-    puts wordlist.size
-    i = 0
-    no_combo = wordlist.size
-    result = Hash.new()
-    while i < no_combo
-        result[wordlist[i]] = pro_wordlist[i]
-        i = i + 1
-    end
-
-    temp = result.sort_by{|key, value| value}.reverse
-    if temp.size < 10
-        n = temp.size - 1
-    else
-        n = 9
-    end
-    result_array = Array.new()
-    temp[0..n].each{|f|  result_array << f[0]}
-#puts temp
-    puts result_array
-    etime = Time.now
-    puts etime
-    puts "Total Time =" + (etime-stime).to_s
+mandarin = File.open("dataset/sentences-test-mandarin.txt", "r")
+pinyin = File.open("dataset/sentences-test-pinyin.txt", "r")
+mandarin_pinyin = Hash.new()
+while (lineM = mandarin.gets)
+    lineP = pinyin.gets
+    mandarin_pinyin[lineP] = lineM
 end
+MPresult = Hash.new()
+mandarin_pinyin.each do |key, value|
+    MPresult[key] = model.PinyinToMandarin(key)
+end
+score = Hash.new()
+MPresult.each do |key, value|
+    score[key] = 0.0
+    correct = mandarin_pinyin[key]
+    size = correct.size
+    value.each do |v|
+        j = 0
+        temp = 0
+        while j < v.size
+            c = correct.slice(j,1)
+            a = v.slice(j,1)
+            j = j + 1
+            if (c.to_s == a.to_s)
+                temp += 1.0
+            end
+        end
+        if (temp > score[key])
+            score[key] = temp
+        end
+    end
+    size = size - 1
+    score[key] = score[key].to_f/size.to_f
+end
+puts score
 ##### main ends #####
